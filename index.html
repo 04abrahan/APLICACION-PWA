@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Descubre Perú - PWA</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#D32F2F">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Descubre Perú</h1>
+            <p class="header-subtitle">Riqueza cultural, histórica y natural</p>
+            <div class="status">
+                <span id="connection-status" class="status-online">En línea</span>
+            </div>
+            <div class="peru-flag">
+                <div class="flag-red"></div>
+                <div class="flag-white"></div>
+                <div class="flag-red"></div>
+            </div>
+        </header>
+
+        <main>
+            <section class="content">
+                <h2>Maravillas del Perú</h2>
+                <p>Explora la diversidad cultural, histórica y natural de uno de los países más fascinantes de Sudamérica.</p>
+                
+                <div class="features">
+                    <div class="feature-card" onclick="showModal('machupicchu')">
+                        <h3>🏔️ Machu Picchu</h3>
+                        <p>La ciudadela inca más famosa del mundo, Patrimonio de la Humanidad.</p>
+                    </div>
+                    <div class="feature-card" onclick="showModal('lineas-nazca')">
+                        <h3>🌀 Líneas de Nazca</h3>
+                        <p>Misteriosos geoglifos en el desierto, visibles desde el aire.</p>
+                    </div>
+                    <div class="feature-card" onclick="showModal('lago-titicaca')">
+                        <h3>🌊 Lago Titicaca</h3>
+                        <p>El lago navegable más alto del mundo, cuna de los Uros.</p>
+                    </div>
+                    <div class="feature-card" onclick="showModal('amazonia')">
+                        <h3>🌳 Amazonía Peruana</h3>
+                        <p>Una de las regiones con mayor biodiversidad del planeta.</p>
+                    </div>
+                </div>
+
+                <button id="install-btn" class="install-button" style="display: none;">
+                    Instalar App
+                </button>
+
+                <div class="data-section">
+                    <h3>Información actualizada</h3>
+                    <div id="data-container">
+                        <p id="current-time">Cargando hora actual...</p>
+                        <p id="random-data">Cargando datos sobre Perú...</p>
+                    </div>
+                    <button id="refresh-btn" class="refresh-button">Actualizar Información</button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Descubre Perú - PWA. Todos los derechos reservados.</p>
+        </footer>
+    </div>
+
+    <!-- Modal para mostrar detalles -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <div id="modal-content"></div>
+        </div>
+    </div>
+
+    <script>
+        // pwa-app.js - Clase principal de la aplicación
+        class PWAApp {
+            constructor() {
+                this.deferredPrompt = null;
+                this.isOnline = navigator.onLine;
+                this.peruData = [
+                    "Perú tiene 12 sitios declarados Patrimonio de la Humanidad por la UNESCO.",
+                    "El español es el idioma oficial, pero también se hablan 47 lenguas nativas.",
+                    "La gastronomía peruana ha sido reconocida como una de las mejores del mundo.",
+                    "Perú alberga el cañón más profundo del mundo: el Cañón del Colca.",
+                    "La papa es originaria de Perú, donde existen más de 3,000 variedades.",
+                    "El río Amazonas nace en Perú, en la región de Arequipa.",
+                    "Perú es el primer productor mundial de plata y segundo de cobre.",
+                    "La ciudad de Caral, en Perú, es la civilización más antigua de América.",
+                    "El ceviche peruano fue declarado Patrimonio Cultural de la Nación.",
+                    "Perú tiene 84 de las 117 zonas de vida identificadas en el mundo."
+                ];
+                this.init();
+            }
+
+            init() {
+                this.registerServiceWorker();
+                this.setupEventListeners();
+                this.updateConnectionStatus();
+                this.loadData();
+                this.setupInstallPrompt();
+            }
+
+            // Registrar el Service Worker
+            registerServiceWorker() {
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('/sw-peru.js')
+                        .then((registration) => {
+                            console.log('Service Worker registrado con éxito:', registration);
+                            
+                            // Verificar actualizaciones periódicamente
+                            setInterval(() => {
+                                registration.update();
+                            }, 60 * 60 * 1000); // Cada hora
+
+                            // Escuchar nuevas versiones
+                            registration.addEventListener('updatefound', () => {
+                                const newWorker = registration.installing;
+                                console.log('Nueva versión del Service Worker encontrada');
+                                
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        this.showUpdateNotification();
+                                    }
+                                });
+                            });
+                        })
+                        .catch((error) => {
+                            console.error('Error registrando el Service Worker:', error);
+                        });
+
+                    // Escuchar cuando un nuevo SW toma control
+                    let refreshing = false;
+                    navigator.serviceWorker.addEventListener('controllerchange', () => {
+                        if (!refreshing) {
+                            refreshing = true;
+                            console.log('Nuevo Service Worker tomando control, recargando...');
+                            window.location.reload();
+                        }
+                    });
+                }
+            }
+
+            // Configurar event listeners
+            setupEventListeners() {
+                // Eventos de conexión
+                window.addEventListener('online', () => this.handleOnline());
+                window.addEventListener('offline', () => this.handleOffline());
+                
+                // Botón de actualizar datos
+                const refreshBtn = document.getElementById('refresh-btn');
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', () => this.loadData());
+                }
+                
+                // Botón de instalar
+                const installBtn = document.getElementById('install-btn');
+                if (installBtn) {
+                    installBtn.addEventListener('click', () => this.installApp());
+                }
+            }
+
+            // Configurar prompt de instalación
+            setupInstallPrompt() {
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    e.preventDefault();
+                    this.deferredPrompt = e;
+                    this.showInstallButton();
+                });
+
+                window.addEventListener('appinstalled', () => {
+                    console.log('App instalada');
+                    this.hideInstallButton();
+                    this.deferredPrompt = null;
+                    this.showNotification('App Instalada', 'Descubre Perú se ha instalado correctamente');
+                });
+            }
+
+            // Mostrar botón de instalación
+            showInstallButton() {
+                const installBtn = document.getElementById('install-btn');
+                if (installBtn) {
+                    installBtn.style.display = 'block';
+                }
+            }
+
+            // Ocultar botón de instalación
+            hideInstallButton() {
+                const installBtn = document.getElementById('install-btn');
+                if (installBtn) {
+                    installBtn.style.display = 'none';
+                }
+            }
+
+            // Instalar la app
+            installApp() {
+                if (this.deferredPrompt) {
+                    this.deferredPrompt.prompt();
+                    
+                    this.deferredPrompt.userChoice.then((choiceResult) => {
+                        if (choiceResult.outcome === 'accepted') {
+                            console.log('Usuario aceptó la instalación');
+                        } else {
+                            console.log('Usuario rechazó la instalación');
+                        }
+                        this.deferredPrompt = null;
+                    });
+                }
+            }
+
+            // Manejar estado online
+            handleOnline() {
+                this.isOnline = true;
+                this.updateConnectionStatus();
+                this.loadData();
+                this.showNotification('Conexión restaurada', 'Ya estás en línea');
+            }
+
+            // Manejar estado offline
+            handleOffline() {
+                this.isOnline = false;
+                this.updateConnectionStatus();
+                this.showNotification('Sin conexión', 'Modo offline activado');
+            }
+
+            // Actualizar indicador de conexión
+            updateConnectionStatus() {
+                const statusElement = document.getElementById('connection-status');
+                if (!statusElement) return;
+                
+                if (this.isOnline) {
+                    statusElement.textContent = 'En línea';
+                    statusElement.className = 'status-online';
+                } else {
+                    statusElement.textContent = 'Offline';
+                    statusElement.className = 'status-offline';
+                }
+            }
+
+            // Cargar datos (simulando API)
+            async loadData() {
+                const timeElement = document.getElementById('current-time');
+                const dataElement = document.getElementById('random-data');
+
+                if (!timeElement || !dataElement) return;
+
+                // Mostrar hora actual (siempre disponible)
+                timeElement.textContent = `Hora actual en Perú: ${new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima' })}`;
+
+                if (this.isOnline) {
+                    // Intentar cargar datos de la API
+                    try {
+                        dataElement.textContent = 'Cargando datos sobre Perú...';
+                        dataElement.style.color = '#3498db';
+                        
+                        const randomData = await this.fetchPeruData();
+                        dataElement.textContent = `Dato sobre Perú: ${randomData}`;
+                        dataElement.style.color = '#2ecc71';
+                    } catch (error) {
+                        dataElement.textContent = 'Error cargando datos en línea';
+                        dataElement.style.color = '#e74c3c';
+                    }
+                } else {
+                    // Modo offline - usar datos cacheados o por defecto
+                    const randomIndex = Math.floor(Math.random() * this.peruData.length);
+                    dataElement.textContent = `Modo offline - ${this.peruData[randomIndex]}`;
+                    dataElement.style.color = '#f39c12';
+                }
+            }
+
+            // Simular fetch de datos
+            async fetchPeruData() {
+                // Simular delay de red
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Datos simulados
+                const randomIndex = Math.floor(Math.random() * this.peruData.length);
+                return this.peruData[randomIndex];
+            }
+
+            // Mostrar notificación
+            showNotification(title, message) {
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification(title, {
+                        body: message,
+                        icon: '/icon-192.png',
+                        badge: '/icon-192.png'
+                    });
+                }
+            }
+
+            // Mostrar notificación de actualización
+            showUpdateNotification() {
+                if (confirm('¡Hay una nueva versión disponible! ¿Quieres actualizar ahora?')) {
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.ready.then((registration) => {
+                            if (registration.active) {
+                                registration.active.postMessage({ type: 'SKIP_WAITING' });
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        // Funciones para el modal
+        function showModal(type) {
+            const modal = document.getElementById('modal');
+            const modalContent = document.getElementById('modal-content');
+            
+            let content = '';
+            
+            switch(type) {
+                case 'machupicchu':
+                    content = `
+                        <h3>Machu Picchu</h3>
+                        <p>Machu Picchu es una antigua ciudadela inca ubicada en las alturas de las montañas de los Andes en Perú, sobre el valle del río Urubamba. Construida en el siglo XV y abandonada posteriormente, es famosa por sus sofisticadas paredes de piedra seca que combinan enormes bloques sin el uso de mortero.</p>
+                        <p><strong>Ubicación:</strong> Región Cusco, Provincia de Urubamba</p>
+                        <p><strong>Altitud:</strong> 2,430 metros sobre el nivel del mar</p>
+                        <p><strong>Descubrimiento:</strong> 1911 por Hiram Bingham</p>
+                    `;
+                    break;
+                case 'lineas-nazca':
+                    content = `
+                        <h3>Líneas de Nazca</h3>
+                        <p>Las Líneas de Nazca son una serie de geoglifos antiguos ubicados en el desierto de Nazca, en el sur de Perú. Fueron creadas entre 500 a.C. y 500 d.C. por la cultura Nazca. Estas líneas forman diversos diseños que van desde simples líneas hasta complejas figuras de animales, plantas y seres mitológicos.</p>
+                        <p><strong>Ubicación:</strong> Desierto de Nazca, Región Ica</p>
+                        <p><strong>Extensión:</strong> Aproximadamente 450 km²</p>
+                        <p><strong>Patrimonio UNESCO:</strong> Desde 1994</p>
+                    `;
+                    break;
+                case 'lago-titicaca':
+                    content = `
+                        <h3>Lago Titicaca</h3>
+                        <p>El Lago Titicaca es el lago navegable más alto del mundo, ubicado en los Andes a una altitud de 3,812 metros. Se extiende por la frontera entre Perú y Bolivia. Es conocido por sus islas flotantes artificiales habitadas por los Uros, una cultura preincaica que construye sus islas con totora.</p>
+                        <p><strong>Ubicación:</strong> Región Puno, frontera Perú-Bolivia</p>
+                        <p><strong>Superficie:</strong> 8,372 km²</p>
+                        <p><strong>Profundidad máxima:</strong> 281 metros</p>
+                    `;
+                    break;
+                case 'amazonia':
+                    content = `
+                        <h3>Amazonía Peruana</h3>
+                        <p>La Amazonía peruana es la parte de la Amazonía que se extiende por el territorio de Perú, desde el este de los Andes hasta las fronteras con Ecuador, Colombia, Brasil y Bolivia. Esta región representa el 60% del territorio peruano y es una de las zonas con mayor biodiversidad del planeta.</p>
+                        <p><strong>Extensión:</strong> Aproximadamente 782,880 km²</p>
+                        <p><strong>Biodiversidad:</strong> Más de 25,000 especies de plantas</p>
+                        <p><strong>Río principal:</strong> Amazonas (nacimiento en Perú)</p>
+                    `;
+                    break;
+            }
+            
+            modalContent.innerHTML = content;
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('modal');
+            modal.style.display = 'none';
+        }
+
+        // Inicializar la aplicación cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', () => {
+            // Solicitar permisos de notificación
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    console.log('Permiso de notificación:', permission);
+                });
+            }
+            
+            // Inicializar la aplicación
+            new PWAApp();
+        });
+
+        // Detectar si la app está instalada
+        window.addEventListener('load', () => {
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+                console.log('La app se está ejecutando en modo instalado');
+            }
+        });
+    </script>
+</body>
+</html>
